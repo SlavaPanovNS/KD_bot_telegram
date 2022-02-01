@@ -90,12 +90,6 @@ execute_query(connection, create_users_table)
 
 #users = execute_read_query(connection, select_users_for_stat)
 
-# Строка для вывода статистики
-#statkd = ''
-#for i in users:
-#    statkd += f'@{i[0]} : {i[1]}\n'
-
-
 bot = Bot(token=tokenKD.tok)
 dp = Dispatcher(bot)
 
@@ -148,15 +142,37 @@ async def join_command(message : types.Message):
             await message.answer('@' + username + ' ты уже в игре')
         else:
             cursor_insert(connection, insert_users, for_users)
-            await message.answer('Теперь ты в игре')
+            await message.answer('@' + username +' теперь ты в игре')
     else:
         cursor_insert(connection, insert_chats, for_chats)
         cursor_insert(connection, insert_users, for_users)
-        await message.answer('Теперь ты в игре')
+        await message.answer('@' + username +' теперь ты в игре')
 
 @dp.message_handler(commands=['stat'])
 async def join_command(message : types.Message):
-    await message.answer('пук')
+    chat_id = message.chat.id
+    username = message.from_user.username
+    all_chats = execute_read_query(connection, select_chats)
+    chats = [x[0] for x in all_chats]
+    if chat_id in chats:
+        cursor = connection.cursor()
+        cursor.execute(f'SELECT username FROM users WHERE chat_id = {chat_id}')
+        all_users = cursor.fetchall()
+        game = [x[0] for x in all_users]
+
+        if username in game:
+            cursor = connection.cursor()
+            cursor.execute(f'SELECT username, score FROM users WHERE chat_id = {chat_id}')
+            all_stats = cursor.fetchall()
+            statkd = ''
+            for i in all_stats:
+                statkd += f'@{i[0]} : {i[1]}\n'
+            
+            await message.answer(statkd)
+        else:
+            await message.answer('@' + username +' сначала нажми /join')
+    else:
+        await message.answer('@' + username +' сначала нажми /join')
 
 
 
