@@ -21,8 +21,7 @@ soup_list = ['Борщик', 'Свежие Щи', 'Гороховый', 'Уха'
              'Шурпа', 'Молочный', 'Щавелевый', 'Суп из семи залуп', 'Фо Бо', 'Гороховый',
              'Тыквенный', 'Сегодня без супа дня. Просто дошика покушаем']
 
-# SQL запросы
-# Создание соединения
+# Функция создание соединения к БД
 def create_connection(path):
     connection = None
     try:
@@ -33,7 +32,7 @@ def create_connection(path):
 
     return connection
 
-# Внесение изменений
+# Функция внесение изменений
 def execute_query(connection, query):
     cursor = connection.cursor()
     try:
@@ -43,7 +42,7 @@ def execute_query(connection, query):
     except Error as e:
         print(f'The error "{e}" occured.')
 
-# Внесение значений с "?"
+# Функция внесение изменений с "?"
 def cursor_insert(connection, query, val):
     cursor = connection.cursor()
     try:
@@ -53,7 +52,7 @@ def cursor_insert(connection, query, val):
     except Error as e:
         print(f'The error "{e}" occured.')
 
-# Извлечение из таблицы
+# Функция извлечения из таблицы
 def execute_read_query(connection, query):
     cursor = connection.cursor()
     result = None
@@ -63,9 +62,6 @@ def execute_read_query(connection, query):
         return result
     except Error as e:
         print(f'The error "{e}" occured.')
-
-
-connection =  create_connection('D:\SQL\db\kd.db')
 
 create_chats_table = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -91,12 +87,75 @@ INSERT or IGNORE INTO users
 (chat_id, user_id, username, score) VALUES (?,?,?,?);
 """
 
+def select_username(chat_id):
+    return f'SELECT username FROM users WHERE chat_id = {chat_id}'
+
+# Функция проверки чатов на наличие в БД
+def check_chats(chat_id):
+    all_chats = execute_read_query(connection, select_chats)
+    chats = [x[0] for x in all_chats]
+    if chat_id in chats:
+        return True
+    return False
+
+# Функция проверки юзеров на наличие в БД
+def check_users(chat_id, username):
+    selected_users = select_username(chat_id)
+    all_users = execute_read_query(connection, selected_users)
+    game = [x[0] for x in all_users]
+    if username in game:
+        return True
+    return False
+
+# Функция проверки необходимой даты
+def check_date(chat_id):
+    cursor = connection.cursor()
+    cursor.execute(f'SELECT date FROM chats WHERE chat_id = {chat_id}')
+    game_date = cursor.fetchall()
+    if game_date[0][0] != str(today):
+        return True
+    return False
+
+# Функция выбора победителя
+def get_winner(chat_id):
+    selected_users = select_username(chat_id)
+    all_users = execute_read_query(connection, selected_users)
+    game = [x[0] for x in all_users]
+    winner = random.choice(game)
+    return winner
+
+# Функция получения статистики
+def get_stat(chat_id):
+    cursor = connection.cursor()
+    cursor.execute(f'SELECT username, score FROM users WHERE chat_id = {chat_id}')
+    all_stats = cursor.fetchall()
+    statkd = ''
+    for i in all_stats:
+        statkd += f'@{i[0]} : {i[1]}\n'
+    return statkd
+
+# Функция удаления пользователя
+def delete_user(chat_id, username):
+    cursor = connection.cursor()
+    cursor.execute(f"DELETE FROM users WHERE chat_id = {chat_id} AND username = '{username}'")
+    connection.commit()
+
+# Функция обновления score и date
+def update_score_and_date(chat_id, winner):
+    cursor = connection.cursor()
+    cursor.execute(f"UPDATE users SET score = score+1 WHERE chat_id = {chat_id} AND username = '{winner}'")
+    connection.commit()
+    cursor.execute(f"UPDATE chats SET date = '{today}' WHERE chat_id = {chat_id}")
+    connection.commit()
+
+# Создание соединения
+connection =  create_connection('D:\SQL\db\kd.db')
+
 # Создание таблиц
 execute_query(connection, create_chats_table)
 execute_query(connection, create_users_table)
 
-#users = execute_read_query(connection, select_users_for_stat)
-
+# Создание Бота и Диспетчера
 bot = Bot(token=tokenKD.tok)
 dp = Dispatcher(bot)
 
@@ -115,7 +174,6 @@ async def start_command(message : types.Message):
 
 @dp.message_handler(commands=['soup'])
 async def start_command(message : types.Message):
-    username = message.from_user.username
     await message.answer('Готовимся к готовке 🧅🧄🥕🥔🔪')
     time.sleep(1)
     await message.answer('Проверяем холодильник.')
@@ -128,19 +186,9 @@ async def start_command(message : types.Message):
 async def run_command(message : types.Message):
     chat_id = message.chat.id
     username = message.from_user.username
-    all_chats = execute_read_query(connection, select_chats)
-    chats = [x[0] for x in all_chats]
-
-    if chat_id in chats:
-        cursor = connection.cursor()
-        cursor.execute(f'SELECT username FROM users WHERE chat_id = {chat_id}')
-        all_users = cursor.fetchall()
-        game = [x[0] for x in all_users]
-
-        if username in game:
-            cursor.execute(f'SELECT date FROM chats WHERE chat_id = {chat_id}')
-            game_date = cursor.fetchall()
-            if game_date[0][0] != str(today):
+    if check_chats(chat_id):
+        if check_users(chat_id, username):
+            if check_date(chat_id):
                 await message.answer('Бесплатная лотерея запущена.')
                 time.sleep(1)
                 await message.answer('Слушаем что шепчут улицы.')
@@ -155,12 +203,9 @@ async def run_command(message : types.Message):
                 time.sleep(1)
                 await message.answer('🌝')
                 time.sleep(1)
-                winner = random.choice(game)
+                winner = get_winner(chat_id)
                 await message.answer('🏆 Красавчик дня: @' + winner)
-                cursor.execute(f"UPDATE users SET score = score+1 WHERE chat_id = {chat_id} AND username = '{winner}'")
-                connection.commit()
-                cursor.execute(f"UPDATE chats SET date = '{today}' WHERE chat_id = {chat_id}")
-                connection.commit()
+                update_score_and_date(chat_id, winner)
             else:
                 await message.answer('Игра уже была сегодня! нажми /stat , чтобы узнать статистику.')
         else:
@@ -176,16 +221,8 @@ async def join_command(message : types.Message):
     username = message.from_user.username
     for_users = (chat_id, user_id, username, 0)
     for_chats = (chat_id, yesterday)
-    all_chats = execute_read_query(connection, select_chats)
-    chats = [x[0] for x in all_chats]
-
-    if chat_id in chats:
-        cursor = connection.cursor()
-        cursor.execute(f'SELECT username FROM users WHERE chat_id = {chat_id}')
-        all_users = cursor.fetchall()
-        game = [x[0] for x in all_users]
-
-        if username in game:
+    if check_chats(chat_id):
+        if check_users(chat_id, username):
             await message.answer('@' + username + ' ты уже в игре')
         else:
             cursor_insert(connection, insert_users, for_users)
@@ -199,22 +236,9 @@ async def join_command(message : types.Message):
 async def join_command(message : types.Message):
     chat_id = message.chat.id
     username = message.from_user.username
-    all_chats = execute_read_query(connection, select_chats)
-    chats = [x[0] for x in all_chats]
-    if chat_id in chats:
-        cursor = connection.cursor()
-        cursor.execute(f'SELECT username FROM users WHERE chat_id = {chat_id}')
-        all_users = cursor.fetchall()
-        game = [x[0] for x in all_users]
-
-        if username in game:
-            cursor = connection.cursor()
-            cursor.execute(f'SELECT username, score FROM users WHERE chat_id = {chat_id}')
-            all_stats = cursor.fetchall()
-            statkd = ''
-            for i in all_stats:
-                statkd += f'@{i[0]} : {i[1]}\n'
-            
+    if check_chats(chat_id):
+        if check_users(chat_id, username):
+            statkd = get_stat(chat_id)            
             await message.answer(statkd)
         else:
             await message.answer('@' + username +' сначала нажми /join')
@@ -225,18 +249,9 @@ async def join_command(message : types.Message):
 async def join_command(message : types.Message):
     chat_id = message.chat.id
     username = message.from_user.username
-    all_chats = execute_read_query(connection, select_chats)
-    chats = [x[0] for x in all_chats]
-
-    if chat_id in chats:
-        cursor = connection.cursor()
-        cursor.execute(f'SELECT username FROM users WHERE chat_id = {chat_id}')
-        all_users = cursor.fetchall()
-        game = [x[0] for x in all_users]
-
-        if username in game:
-            cursor.execute(f"DELETE FROM users WHERE chat_id = {chat_id} AND username = '{username}'")
-            connection.commit()
+    if check_chats(chat_id):
+        if check_users(chat_id, username):
+            delete_user(chat_id, username)
             await message.answer('@' + username + ' покинул игру')
         else:
             await message.answer('@' + username +' сначала надо вступить в игру.')
