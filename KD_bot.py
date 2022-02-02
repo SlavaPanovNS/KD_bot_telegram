@@ -12,8 +12,9 @@ import random
 from datetime import date, timedelta
 
 # Сегодняшняя дата
-today = date.today()
-yesterday = today - timedelta(days=1)
+def get_today():
+    today = date.today()
+    return today
 
 # Список супов
 soup_list = ['Борщик', 'Свежие Щи', 'Гороховый', 'Уха', 'Кислые Щи', 'Рассольник', 'Суп с Галушками',
@@ -66,7 +67,8 @@ def execute_read_query(connection, query):
 create_chats_table = """
 CREATE TABLE IF NOT EXISTS chats (
     chat_id INTEGER PRIMARY KEY,
-    date DATE);
+    date DATE,
+    winner TEXT);
 """
 create_users_table = """
 CREATE TABLE IF NOT EXISTS users (
@@ -109,6 +111,7 @@ def check_users(chat_id, username):
 
 # Функция проверки необходимой даты
 def check_date(chat_id):
+    today = get_today()
     cursor = connection.cursor()
     cursor.execute(f'SELECT date FROM chats WHERE chat_id = {chat_id}')
     game_date = cursor.fetchall()
@@ -129,7 +132,7 @@ def get_stat(chat_id):
     cursor = connection.cursor()
     cursor.execute(f'SELECT username, score FROM users WHERE chat_id = {chat_id}')
     all_stats = cursor.fetchall()
-    statkd = ''
+    statkd = 'Статистика побед\n'
     for i in all_stats:
         statkd += f'@{i[0]} : {i[1]}\n'
     return statkd
@@ -142,11 +145,21 @@ def delete_user(chat_id, username):
 
 # Функция обновления score и date
 def update_score_and_date(chat_id, winner):
+    today = get_today()
     cursor = connection.cursor()
     cursor.execute(f"UPDATE users SET score = score+1 WHERE chat_id = {chat_id} AND username = '{winner}'")
     connection.commit()
     cursor.execute(f"UPDATE chats SET date = '{today}' WHERE chat_id = {chat_id}")
     connection.commit()
+    cursor.execute(f"UPDATE chats SET winner = '{winner}' WHERE chat_id = {chat_id}")
+    connection.commit()
+
+# Функция проверки победителя
+def get_today_winner(chat_id):
+    cursor = connection.cursor()
+    cursor.execute(f'SELECT winner FROM chats WHERE chat_id = {chat_id}')
+    winner = cursor.fetchall()
+    return winner[0][0]
 
 # Создание соединения
 connection =  create_connection('D:\SQL\db\kd.db')
@@ -167,7 +180,6 @@ async def start_command(message : types.Message):
 
 @dp.message_handler(commands=['help'])
 async def start_command(message : types.Message):
-    username = message.from_user.username
     await message.answer('Игра "Красавчик Дня". Каждый день наш бот по вашей команде будет определять\
 красавчика дня в вашей группе.\n/join - чтобы вступить в игру\n/end - чтобы покинуть\n\
 /run - чтобы начать\n/stat - узнать статистику побед\n/soup - узнать супчик дня.')
@@ -204,10 +216,11 @@ async def run_command(message : types.Message):
                 await message.answer('🌝')
                 time.sleep(1)
                 winner = get_winner(chat_id)
-                await message.answer('🏆 Красавчик дня: @' + winner)
+                await message.answer('🏆 Красавчик дня: @' + str(winner))
                 update_score_and_date(chat_id, winner)
             else:
-                await message.answer('Игра уже была сегодня! нажми /stat , чтобы узнать статистику.')
+                today_winner = get_today_winner(chat_id)
+                await message.answer(f'Игра уже была сегодня! Выиграл @{today_winner} нажми /stat , чтобы узнать статистику.')
         else:
             await message.answer('@' + username +' сначала нажми /join')
     else:
@@ -216,6 +229,8 @@ async def run_command(message : types.Message):
 
 @dp.message_handler(commands=['join'])
 async def join_command(message : types.Message):
+    today = get_today()
+    yesterday = today - timedelta(days=1)
     user_id = message.from_user.id
     chat_id = message.chat.id
     username = message.from_user.username
