@@ -9,10 +9,17 @@ import sqlite3
 from sqlite3 import Error
 
 import random
-from datetime import date
+from datetime import date, timedelta
 
 # Сегодняшняя дата
 today = date.today()
+yesterday = today - timedelta(days=1)
+
+# Список супов
+soup_list = ['Борщик', 'Свежие Щи', 'Гороховый', 'Уха', 'Кислые Щи', 'Рассольник', 'Суп с Галушками',
+             'Харчо', 'Томатный', 'Суп с фрикадельками','Куриный с лапшой', 'Диетический', 'Грибной',
+             'Шурпа', 'Молочный', 'Щавелевый', 'Суп из семи залуп', 'Фо Бо', 'Гороховый',
+             'Тыквенный', 'Сегодня без супа дня. Просто дошика покушаем']
 
 # SQL запросы
 # Создание соединения
@@ -106,21 +113,61 @@ async def start_command(message : types.Message):
 красавчика дня в вашей группе.\n/join - чтобы вступить в игру\n/end - чтобы покинуть\n\
 /run - чтобы начать\n/stat - узнать статистику побед\n/soup - узнать супчик дня.')
 
+@dp.message_handler(commands=['soup'])
+async def start_command(message : types.Message):
+    username = message.from_user.username
+    await message.answer('Готовимся к готовке 🧅🧄🥕🥔🔪')
+    time.sleep(1)
+    await message.answer('Проверяем холодильник.')
+    time.sleep(1)
+    await message.answer('Супчик дня:...')
+    time.sleep(1)
+    await message.answer(random.choice(soup_list))
+
 @dp.message_handler(commands=['run'])
 async def run_command(message : types.Message):
-    await message.answer('Бесплатная лотерея запущена.')
-    time.sleep(1)
-    await message.answer('Слушаем что шепчут улицы.')
-    time.sleep(1)
-    await message.answer('Гадаем на картах Таро')
-    time.sleep(1)
-    await message.answer('Подсматриваем в лунный календарь.')
-    time.sleep(1)
-    await message.answer('Ты не поверишь!')
-    time.sleep(1)
-    await message.answer('Похоже, что...')
-    time.sleep(1)
-    await message.answer('Красавчик дня: ')
+    chat_id = message.chat.id
+    username = message.from_user.username
+    all_chats = execute_read_query(connection, select_chats)
+    chats = [x[0] for x in all_chats]
+
+    if chat_id in chats:
+        cursor = connection.cursor()
+        cursor.execute(f'SELECT username FROM users WHERE chat_id = {chat_id}')
+        all_users = cursor.fetchall()
+        game = [x[0] for x in all_users]
+
+        if username in game:
+            cursor.execute(f'SELECT date FROM chats WHERE chat_id = {chat_id}')
+            game_date = cursor.fetchall()
+            if game_date[0][0] != str(today):
+                await message.answer('Бесплатная лотерея запущена.')
+                time.sleep(1)
+                await message.answer('Слушаем что шепчут улицы.')
+                time.sleep(1)
+                await message.answer('Гадаем на картах Таро.')
+                time.sleep(1)
+                await message.answer('Подсматриваем в лунный календарь.')
+                time.sleep(1)
+                await message.answer('Ты не поверишь!')
+                time.sleep(1)
+                await message.answer('Похоже, что...')
+                time.sleep(1)
+                await message.answer('🌝')
+                time.sleep(1)
+                winner = random.choice(game)
+                await message.answer('🏆 Красавчик дня: @' + winner)
+                cursor.execute(f"UPDATE users SET score = score+1 WHERE chat_id = {chat_id} AND username = '{winner}'")
+                connection.commit()
+                cursor.execute(f"UPDATE chats SET date = '{today}' WHERE chat_id = {chat_id}")
+                connection.commit()
+            else:
+                await message.answer('Игра уже была сегодня! нажми /stat , чтобы узнать статистику.')
+        else:
+            await message.answer('@' + username +' сначала нажми /join')
+    else:
+        await message.answer('@' + username +' сначала нажми /join')
+    
 
 @dp.message_handler(commands=['join'])
 async def join_command(message : types.Message):
@@ -128,7 +175,7 @@ async def join_command(message : types.Message):
     chat_id = message.chat.id
     username = message.from_user.username
     for_users = (chat_id, user_id, username, 0)
-    for_chats = (chat_id, today)
+    for_chats = (chat_id, yesterday)
     all_chats = execute_read_query(connection, select_chats)
     chats = [x[0] for x in all_chats]
 
@@ -174,6 +221,27 @@ async def join_command(message : types.Message):
     else:
         await message.answer('@' + username +' сначала нажми /join')
 
+@dp.message_handler(commands=['end'])
+async def join_command(message : types.Message):
+    chat_id = message.chat.id
+    username = message.from_user.username
+    all_chats = execute_read_query(connection, select_chats)
+    chats = [x[0] for x in all_chats]
+
+    if chat_id in chats:
+        cursor = connection.cursor()
+        cursor.execute(f'SELECT username FROM users WHERE chat_id = {chat_id}')
+        all_users = cursor.fetchall()
+        game = [x[0] for x in all_users]
+
+        if username in game:
+            cursor.execute(f"DELETE FROM users WHERE chat_id = {chat_id} AND username = '{username}'")
+            connection.commit()
+            await message.answer('@' + username + ' покинул игру')
+        else:
+            await message.answer('@' + username +' сначала надо вступить в игру.')
+    else:
+        await message.answer('@' + username +' сначала надо вступить в игру.')
 
 
 executor.start_polling(dp, skip_updates=True)
