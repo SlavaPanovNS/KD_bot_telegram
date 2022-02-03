@@ -130,11 +130,13 @@ def get_winner(chat_id):
 # Функция получения статистики
 def get_stat(chat_id):
     cursor = connection.cursor()
-    cursor.execute(f'SELECT username, score FROM users WHERE chat_id = {chat_id}')
+    cursor.execute(f'SELECT username, score FROM users WHERE chat_id = {chat_id} ORDER BY score DESC')
     all_stats = cursor.fetchall()
-    statkd = 'Статистика побед\n'
+    statkd = '🏆Статистика побед:\n'
+    index = 1
     for i in all_stats:
-        statkd += f'@{i[0]} : {i[1]}\n'
+        statkd += f'{index}.@{i[0]} : {i[1]}\n'
+        index += 1
     return statkd
 
 # Функция удаления пользователя
@@ -220,7 +222,7 @@ async def run_command(message : types.Message):
                 update_score_and_date(chat_id, winner)
             else:
                 today_winner = get_today_winner(chat_id)
-                await message.answer(f'Игра уже была сегодня! Выиграл @{today_winner} нажми /stat , чтобы узнать статистику.')
+                await message.answer(f'Игра уже была сегодня!\nВыиграл @{today_winner}\nНажми /stat , чтобы узнать статистику.')
         else:
             await message.answer('@' + username +' сначала нажми /join')
     else:
@@ -241,11 +243,11 @@ async def join_command(message : types.Message):
             await message.answer('@' + username + ' ты уже в игре')
         else:
             cursor_insert(connection, insert_users, for_users)
-            await message.answer('@' + username +' теперь ты в игре')
+            await message.reply('Теперь ты в игре')
     else:
         cursor_insert(connection, insert_chats, for_chats)
         cursor_insert(connection, insert_users, for_users)
-        await message.answer('@' + username +' теперь ты в игре')
+        await message.reply('Теперь ты в игре')
 
 @dp.message_handler(commands=['stat'])
 async def join_command(message : types.Message):
@@ -256,9 +258,9 @@ async def join_command(message : types.Message):
             statkd = get_stat(chat_id)            
             await message.answer(statkd)
         else:
-            await message.answer('@' + username +' сначала нажми /join')
+            await message.reply('Сначала нажми /join')
     else:
-        await message.answer('@' + username +' сначала нажми /join')
+        await message.reply('Сначала нажми /join')
 
 @dp.message_handler(commands=['end'])
 async def join_command(message : types.Message):
@@ -269,9 +271,9 @@ async def join_command(message : types.Message):
             delete_user(chat_id, username)
             await message.answer('@' + username + ' покинул игру')
         else:
-            await message.answer('@' + username +' сначала надо вступить в игру.')
+            await message.reply('Сначала надо вступить в игру.')
     else:
-        await message.answer('@' + username +' сначала надо вступить в игру.')
+        await message.reply('Сначала надо вступить в игру.')
 
 
 executor.start_polling(dp, skip_updates=True)
