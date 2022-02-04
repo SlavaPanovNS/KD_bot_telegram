@@ -175,7 +175,7 @@ def get_today_winner(chat_id):
     return winner[0][0]
 
 # Создание соединения
-connection =  create_connection('D:\SQL\db\kd.db')
+connection =  create_connection('kdv1_1.db')
 
 # Создание таблиц
 execute_query(connection, create_chats_table)
